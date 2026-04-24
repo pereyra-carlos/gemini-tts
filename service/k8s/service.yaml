@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gemini-tts
+  namespace: claude
+  labels:
+    app: gemini-tts
+spec:
+  type: ClusterIP
+  selector:
+    app: gemini-tts
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+# DNS interno: http://gemini-tts.claude.svc.cluster.local:8000
+# Desde ws-router (mismo namespace): http://gemini-tts:8000

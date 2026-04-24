@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gemini-tts
+  namespace: claude
+  labels:
+    app: gemini-tts
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gemini-tts
+  template:
+    metadata:
+      labels:
+        app: gemini-tts
+    spec:
+      containers:
+        - name: gemini-tts
+          image: sauay/gemini-tts:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gemini-tts-secret
+                  key: GOOGLE_API_KEY
+            - name: GEMINI_TTS_MODEL
+              value: gemini-2.5-flash-preview-tts
+            - name: GEMINI_TTS_VOICE
+              value: Aoede
+            - name: AUDIO_DIR
+              value: /audio
+          volumeMounts:
+            - name: audio
+              mountPath: /audio
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: audio
+          emptyDir:
+            sizeLimit: 200Mi

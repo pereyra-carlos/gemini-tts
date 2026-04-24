@@ -57,31 +57,30 @@ kubectl create secret generic gemini-tts-secret -n claude \
 kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml
 ```
 
-### Activar Gemini TTS en clau (switch)
+### Cómo clau usa el TTS
 
-Agregar las 2 env al configmap del ws-router y rolloutear:
+El TTS saliente de clau NO pasa por `/tts` del ws-router: lo genera el propio pod `claude` (claupod) vía la skill `audio-tts` (en NFS `/workspace/.claude/skills/audio-tts/SKILL.md`). La skill hace `curl` contra `$TTS_URL` y `$TTS_FILES_URL`, env vars seteadas en el deployment `claude`.
 
-```bash
-kubectl patch configmap ws-router-config -n claude --type merge -p '{
-  "data": {
-    "TTS_URL": "http://gemini-tts.claude.svc.cluster.local:8000/tts",
-    "TTS_FILES_URL": "http://gemini-tts.claude.svc.cluster.local:8000/files"
-  }
-}'
-kubectl rollout restart deploy/ws-router -n claude
-```
+Copia de referencia de la skill en este repo: `service/audio-tts-SKILL.md`.
 
-### Desactivar (rollback a whisper-tts)
+### Switchear backend
+
+Un solo comando, sin tocar la skill:
 
 ```bash
-kubectl patch configmap ws-router-config -n claude --type json -p='[
-  {"op":"remove","path":"/data/TTS_URL"},
-  {"op":"remove","path":"/data/TTS_FILES_URL"}
-]'
-kubectl rollout restart deploy/ws-router -n claude
-```
+# Activar gemini-tts (default actual, voz Aoede rioplatense):
+kubectl set env deploy/claude -n claude \
+  TTS_URL=http://gemini-tts.claude.svc.cluster.local:8000/tts \
+  TTS_FILES_URL=http://gemini-tts.claude.svc.cluster.local:8000/files
 
-Rollback devuelve al default hardcoded (`http://192.168.0.101:8000/*`).
+# Rollback a whisper-tts (voz Daniela Piper, local en AI Server):
+kubectl set env deploy/claude -n claude \
+  TTS_URL=http://192.168.0.101:8000/tts \
+  TTS_FILES_URL=http://192.168.0.101:8000/files
+
+# Rollout en cualquier caso:
+kubectl rollout restart deploy/claude -n claude
+```
 
 ### Test rápido
 

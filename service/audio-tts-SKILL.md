@@ -35,7 +35,14 @@ El backend es intercambiable sin editar esta skill — cambia las env del pod `c
 
 4. **Envia el audio** segun el canal (el mismo que del mensaje entrante):
    - **Telegram**: responde con `MEDIA:/tmp/tts_out.ogg` en el texto — gateway.py lo detecta, lee el archivo del FS local y lo manda como voice note.
-   - **WhatsApp**: subi el archivo al message-fileserver y responde con `MEDIA:<url-publica>` (el ws-router hace el fetch). Ver skill `messaging` para el upload.
+   - **WhatsApp**: primero subi el .ogg al message-fileserver y despues responde con la URL publica:
+     ```bash
+     UP=$(curl -s -F "file=@/tmp/tts_out.ogg" http://message-fileserver.claude.svc.cluster.local:8100/upload)
+     FNAME=$(echo "$UP" | python3 -c "import sys,json; print(json.load(sys.stdin)['filename'])")
+     # Responde en el texto final con:
+     #   MEDIA:http://192.168.0.101:30815/media/$FNAME
+     # (el ws-router hace el fetch por ese URL NodePort y lo manda por WA)
+     ```
 
 ## Backends soportados
 
@@ -46,10 +53,29 @@ El backend es intercambiable sin editar esta skill — cambia las env del pod `c
 
 Ambos exponen el mismo contrato HTTP (`/tts` + `/files/{name}`). La skill no necesita saber cual esta activo.
 
+## Estilo del texto a convertir
+
+- **Frases cortas**, naturales. Evitar listas, markdown, headers.
+- Voseo y muletillas rioplatenses ("che", "viste", "dale", "mira") inducen mejor acento porteno en Gemini.
+- Si el texto original tiene codigo o link, reemplazalo por una referencia hablada (ej. "te mande el link aparte") y mandalo en texto separado.
+- Maximo ~300 palabras por audio; si es mas, partilo en 2-3 mensajes.
+
+## Cuando usarla
+
+- `/audio-mode` ON (cada respuesta del turno)
+- "mandame un audio con X"
+- Confirmaciones cortas donde el audio es mas natural ("listo, guardado")
+
+## Cuando NO usarla
+
+- Contenido estructurado (codigo, JSON, tablas, listas largas) — texto es mejor.
+- Carlos esta leyendo en lugar sin audio (chequea si dijo "estoy en reunion").
+- Dentro de una respuesta de texto como complemento — elegi uno solo.
+
 ## Switchear backend (operativa)
 
 ```bash
-# A gemini-tts (default):
+# A gemini-tts (default — no hace falta tocar nada si el env ya esta o no hay env):
 kubectl set env deploy/claude -n claude \
   TTS_URL=http://gemini-tts.claude.svc.cluster.local:8000/tts \
   TTS_FILES_URL=http://gemini-tts.claude.svc.cluster.local:8000/files
@@ -63,4 +89,4 @@ kubectl set env deploy/claude -n claude \
 kubectl rollout restart deploy/claude -n claude
 ```
 
-Esta skill NO cambia al switchear. Copia de referencia en `service/audio-tts-SKILL.md` del repo gemini-tts; vive en el claupod en `/workspace/.claude/skills/audio-tts/SKILL.md`.
+Esta skill NO cambia al switchear. El backup legado esta en `SKILL.md.bak-whisper` (skill con endpoint hardcoded a whisper-tts).
